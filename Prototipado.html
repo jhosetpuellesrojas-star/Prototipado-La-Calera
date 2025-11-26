@@ -1,0 +1,306 @@
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACI - Asistente de Carga Inteligente</title>
+    <!-- Incluye Tailwind CSS para un diseño limpio y responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilo para simular la interfaz de un dispositivo de mano (móvil) */
+        body {
+            background-color: #f0f4f8;
+            font-family: 'Inter', sans-serif;
+        }
+        .scanner-container {
+            max-width: 420px; /* Ancho típico de un dispositivo móvil */
+            height: 100vh;
+            margin: auto;
+            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .product-item {
+            transition: background-color 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="scanner-container">
+    <!-- Encabezado de la Aplicación -->
+    <header class="bg-indigo-700 text-white p-4 shadow-lg flex justify-between items-center">
+        <h1 class="text-xl font-bold">ACI - Carga (La Calera)</h1>
+        <div id="order-status" class="px-2 py-1 text-sm font-semibold rounded-full bg-yellow-500">Pendiente</div>
+    </header>
+
+    <!-- Área de Selección de Pedido -->
+    <div id="order-selection" class="p-4 bg-gray-100 border-b border-gray-200">
+        <label for="order-select" class="block text-sm font-medium text-gray-700 mb-2">Seleccionar Pedido de Despacho:</label>
+        <select id="order-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="" disabled selected>-- Elija un pedido para iniciar --</option>
+            <option value="ORDER-4589">Pedido #4589 (Tienda Arequipa)</option>
+            <option value="ORDER-9012">Pedido #9012 (Tienda Lima Norte)</option>
+        </select>
+        <button onclick="loadSelectedOrder()" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md">
+            Cargar Manifiesto
+        </button>
+    </div>
+
+    <!-- Área de Carga y Escaneo (Oculta inicialmente) -->
+    <div id="loading-area" class="flex-grow hidden flex-col">
+
+        <!-- Info del Pedido y Estatus -->
+        <div class="p-4 bg-white border-b">
+            <p class="text-xs text-gray-500">Pedido Activo:</p>
+            <h2 id="current-order-id" class="text-2xl font-extrabold text-indigo-700">N/A</h2>
+            <div id="completion-progress" class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div id="progress-bar" class="h-full bg-green-500 transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="progress-text" class="text-sm mt-1 text-gray-600 text-right">0 de 0 ítems completados</p>
+        </div>
+
+        <!-- Lista de Productos a Cargar (El Checklist) -->
+        <div id="product-list" class="flex-grow overflow-y-auto p-4 space-y-2">
+            <!-- Los ítems del pedido se inyectarán aquí -->
+        </div>
+
+        <!-- Área de Input/Simulación de Escáner -->
+        <div id="input-area" class="p-4 border-t bg-gray-50">
+            <div id="feedback-message" class="hidden p-3 mb-3 text-center rounded-lg font-semibold transition duration-300"></div>
+
+            <label for="scan-input" class="block text-sm font-medium text-gray-700 mb-1">Simular Escaneo (Código de SKU):</label>
+            <div class="flex space-x-2">
+                <input type="text" id="scan-input" placeholder="Ej: HUEVO_BLANCO_XL" class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:ring-indigo-500 focus:border-indigo-500 uppercase text-sm" onkeyup="handleScanEnter(event)">
+                <button onclick="handleScan()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-r-lg shadow-md transition duration-150">
+                    Escanear
+                </button>
+            </div>
+        </div>
+        
+        <!-- Botón de Finalización de Carga (Oculto hasta completar) -->
+        <button id="finish-dispatch-btn" onclick="finishDispatch()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-4 px-4 shadow-lg transition duration-150 text-lg">
+            CONFIRMAR CARGA Y NOTIFICAR DESPACHO
+        </button>
+    </div>
+
+</div>
+
+<script>
+    // --- MOCK DATA: Simulación del Manifiesto de Pedidos ---
+    // En un programa real, esto vendría de una base de datos (Firestore, en el entorno Canvas)
+    const MOCK_ORDERS = {
+        'ORDER-4589': {
+            id: 'ORDER-4589',
+            destination: 'Tienda Arequipa Sur',
+            totalItems: 3,
+            items: [
+                { sku: 'HUEVO_BLANCO_XL', name: 'Huevo Blanco XL (30u)', required: 500, loaded: 0, unit: 'Cajas', completed: false },
+                { sku: 'HUEVO_COLOR_M', name: 'Huevo Color M (15u)', required: 250, loaded: 0, unit: 'Cajas', completed: false },
+                { sku: 'HUEVO_CODORNIZ', name: 'Huevo de Codorniz (6u)', required: 100, loaded: 0, unit: 'Cajas', completed: false }
+            ]
+        },
+        'ORDER-9012': {
+            id: 'ORDER-9012',
+            destination: 'Tienda Lima Norte',
+            totalItems: 2,
+            items: [
+                { sku: 'HUEVO_BLANCO_XL', name: 'Huevo Blanco XL (30u)', required: 1200, loaded: 0, unit: 'Cajas', completed: false },
+                { sku: 'HUEVO_COLOR_M', name: 'Huevo Color M (15u)', required: 800, loaded: 0, unit: 'Cajas', completed: false }
+            ]
+        }
+    };
+
+    let currentOrder = null;
+
+    /**
+     * Carga el pedido seleccionado del dropdown.
+     */
+    function loadSelectedOrder() {
+        const select = document.getElementById('order-select');
+        const orderId = select.value;
+
+        if (orderId && MOCK_ORDERS[orderId]) {
+            // Clonar el objeto para no modificar la fuente de datos
+            currentOrder = JSON.parse(JSON.stringify(MOCK_ORDERS[orderId]));
+            
+            document.getElementById('order-selection').classList.add('hidden');
+            document.getElementById('loading-area').classList.remove('hidden');
+            document.getElementById('current-order-id').textContent = currentOrder.id + ' (' + currentOrder.destination + ')';
+            
+            updateUI();
+            showFeedback('Pedido ' + currentOrder.id + ' cargado. ¡Inicie el escaneo!', 'bg-blue-100 text-blue-700');
+        } else {
+            alert("Por favor, seleccione un pedido válido.");
+        }
+    }
+
+    /**
+     * Procesa la simulación de escaneo al presionar Enter.
+     */
+    function handleScanEnter(event) {
+        if (event.key === 'Enter') {
+            handleScan();
+        }
+    }
+
+    /**
+     * Lógica principal de validación de escaneo (Tangibilidad del Proceso).
+     */
+    function handleScan() {
+        if (!currentOrder) return;
+
+        const inputElement = document.getElementById('scan-input');
+        const scannedSku = inputElement.value.trim().toUpperCase();
+        inputElement.value = ''; // Limpiar input después de "escanear"
+
+        if (!scannedSku) {
+            showFeedback('Ingrese o escanee un código de producto (SKU).', 'bg-red-100 text-red-700');
+            return;
+        }
+
+        // Buscar el ítem en el manifiesto del pedido
+        const itemToLoad = currentOrder.items.find(item => item.sku === scannedSku);
+
+        if (!itemToLoad) {
+            // ERROR CRÍTICO: Producto no pertenece a este pedido
+            showFeedback('🚫 ERROR: SKU NO VÁLIDO. Este producto no está en el manifiesto.', 'bg-red-500 text-white animate-pulse');
+            // Nota: En un sistema real, esto generaría una alarma sonora
+            return;
+        }
+
+        if (itemToLoad.loaded >= itemToLoad.required) {
+            // ERROR: Cantidad ya completada
+            showFeedback(`⚠️ ADVERTENCIA: La cantidad requerida de ${itemToLoad.name} ya fue alcanzada. Sobrecarga.`, 'bg-yellow-500 text-black');
+            return;
+        }
+
+        // ÉXITO: Incrementar la cantidad cargada
+        itemToLoad.loaded += 1; 
+
+        if (itemToLoad.loaded === itemToLoad.required) {
+            // Completado
+            itemToLoad.completed = true;
+            showFeedback(`✅ Ítem Completado: ${itemToLoad.name}. ¡Cantidad exacta cargada!`, 'bg-green-500 text-white');
+        } else {
+            // Carga parcial exitosa
+            showFeedback(`📦 Carga Exitosa: ${itemToLoad.name}. Faltan ${itemToLoad.required - itemToLoad.loaded} ${itemToLoad.unit}.`, 'bg-green-100 text-green-700');
+        }
+
+        updateUI();
+    }
+
+    /**
+     * Actualiza la interfaz del usuario con el estado actual del pedido.
+     */
+    function updateUI() {
+        const listContainer = document.getElementById('product-list');
+        listContainer.innerHTML = '';
+        
+        let completedItemsCount = 0;
+        let totalRequiredCount = 0;
+        let totalLoadedCount = 0;
+
+        currentOrder.items.forEach(item => {
+            totalRequiredCount += item.required;
+            totalLoadedCount += item.loaded;
+
+            if (item.completed) {
+                completedItemsCount++;
+            }
+
+            const isCompleted = item.loaded >= item.required;
+            const bgColor = isCompleted ? 'bg-green-50' : (item.loaded > 0 ? 'bg-yellow-50' : 'bg-white');
+            const borderColor = isCompleted ? 'border-green-400' : 'border-gray-200';
+            const statusIcon = isCompleted ? '🟢' : (item.loaded > 0 ? '🟡' : '⚪');
+
+            const itemHtml = `
+                <div class="product-item p-4 border-l-4 ${borderColor} ${bgColor} rounded-lg shadow-sm">
+                    <div class="flex justify-between items-center">
+                        <span class="text-lg font-semibold text-gray-800">${statusIcon} ${item.name}</span>
+                        <span class="text-sm font-medium text-gray-500">${item.sku}</span>
+                    </div>
+                    <div class="mt-2 text-sm">
+                        <p class="font-bold">Requerido: <span class="text-indigo-600">${item.required} ${item.unit}</span></p>
+                        <p class="font-bold">Cargado: <span class="${isCompleted ? 'text-green-600' : 'text-yellow-600'}">${item.loaded} ${item.unit}</span></p>
+                        ${!isCompleted && item.loaded > 0 ? `<p class="text-red-500">Faltan: ${item.required - item.loaded} ${item.unit}</p>` : ''}
+                    </div>
+                </div>
+            `;
+            listContainer.innerHTML += itemHtml;
+        });
+
+        // Actualizar barra de progreso
+        const totalItemsInManifest = currentOrder.items.length;
+        const completionPercentage = (completedItemsCount / totalItemsInManifest) * 100;
+        document.getElementById('progress-bar').style.width = completionPercentage + '%';
+        document.getElementById('progress-text').textContent = `${completedItemsCount} de ${totalItemsInManifest} ítems completados (${totalLoadedCount} unidades totales)`;
+
+        // Actualizar estatus general del pedido
+        const statusElement = document.getElementById('order-status');
+        const finishBtn = document.getElementById('finish-dispatch-btn');
+        
+        if (completedItemsCount === totalItemsInManifest) {
+            statusElement.className = 'px-2 py-1 text-sm font-semibold rounded-full bg-green-500 text-white';
+            statusElement.textContent = 'LISTO';
+            finishBtn.classList.remove('hidden'); // Mostrar botón de despacho final
+            showFeedback('¡Carga Completa! Todo listo para notificar el despacho.', 'bg-green-700 text-white');
+        } else {
+            statusElement.className = 'px-2 py-1 text-sm font-semibold rounded-full bg-yellow-500';
+            statusElement.textContent = 'En Proceso';
+            finishBtn.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Muestra mensajes de feedback temporalmente en el área de input.
+     * @param {string} message - El mensaje a mostrar.
+     * @param {string} classes - Clases de Tailwind para el estilo (ej: 'bg-red-500 text-white').
+     */
+    function showFeedback(message, classes) {
+        const feedback = document.getElementById('feedback-message');
+        feedback.textContent = message;
+        feedback.className = `p-3 mb-3 text-center rounded-lg font-semibold transition duration-300 ${classes}`;
+        feedback.classList.remove('hidden');
+
+        // Ocultar mensaje después de 3 segundos
+        clearTimeout(feedback.timer);
+        feedback.timer = setTimeout(() => {
+            feedback.classList.add('hidden');
+        }, 3000);
+    }
+
+    /**
+     * Simula la finalización del despacho y notificación a logística.
+     */
+    function finishDispatch() {
+        if (!currentOrder || document.getElementById('order-status').textContent !== 'LISTO') {
+            showFeedback('Error: La carga aún no está completa o el pedido es inválido.', 'bg-red-500 text-white');
+            return;
+        }
+
+        // Aquí se simularía el envío de la señal al sistema de Despacho (logística)
+        alert(`¡CONFIRMACIÓN ENVIADA! El pedido ${currentOrder.id} está 100% cargado. Se notificó al área de Logística para el traslado inmediato. Retraso CERO.`);
+
+        // Volver al inicio para simular el siguiente pedido
+        resetApp();
+    }
+
+    /**
+     * Resetea el estado de la aplicación
+     */
+    function resetApp() {
+        currentOrder = null;
+        document.getElementById('order-selection').classList.remove('hidden');
+        document.getElementById('loading-area').classList.add('hidden');
+        document.getElementById('order-status').className = 'px-2 py-1 text-sm font-semibold rounded-full bg-yellow-500';
+        document.getElementById('order-status').textContent = 'Pendiente';
+        document.getElementById('order-select').value = '';
+    }
+
+</script>
+
+</body>
+</html>
