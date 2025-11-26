@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prototipo - Sistema Logístico | Huevos La Calera</title>
+  <style>
+    /* Simple, clean styles for prototype */
+    :root{--accent:#1f8feb;--danger:#e74c3c;--muted:#666}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#f5f7fb;color:#111}
+    header{background:linear-gradient(90deg,#fff 0%, #f3f6fb 100%);padding:18px 24px;border-bottom:1px solid #e6e9ef;display:flex;align-items:center;gap:16px}
+    h1{margin:0;font-size:18px}
+    main{padding:20px;display:grid;grid-template-columns:360px 1fr;gap:18px}
+    .card{background:white;border:1px solid #e6e9ef;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(20,30,60,0.04)}
+    label{display:block;font-size:13px;margin-top:8px;color:var(--muted)}
+    input,select,button,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #d7dde8;margin-top:6px;font-size:14px}
+    button{background:var(--accent);color:white;border:none;cursor:pointer}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid #d7dde8}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;border-bottom:1px solid #f0f3f7;text-align:left}
+    .label-preview{border:1px dashed #cdd7ea;padding:10px;border-radius:8px;background:#fcfeff}
+    .small{font-size:12px;color:var(--muted)}
+    .row{display:flex;gap:8px;align-items:center}
+    .badge{background:#eef6ff;color:var(--accent);padding:4px 8px;border-radius:999px;font-size:12px}
+    .danger{color:var(--danger)}
+    .flex-col{display:flex;flex-direction:column}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    .print-area{padding:10px}
+    footer{padding:12px;text-align:center;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <header>
+    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36'><rect width='36' height='36' rx='6' fill='%231f8feb'/><text x='18' y='23' font-size='18' text-anchor='middle' fill='white' font-family='Arial'>HC</text></svg>" alt="logo"/>
+    <div>
+      <h1>Prototipo: Sistema Logístico — Huevos La Calera</h1>
+      <div class="small">Prototipo interactivo para reducción de errores en entrega y automatización de etiquetado</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left column: Scan / Create label / Settings -->
+    <div class="card">
+      <h3>Escaneo / Generar etiqueta</h3>
+      <div class="small">Simula el escaneo de cajas o ingreso manual de datos</div>
+
+      <label>Código de caja (QR / Barcode)</label>
+      <input id="scanCode" placeholder="Ej: HC-2025-0001" />
+
+      <label>Producto</label>
+      <select id="product">
+        <option value="Huevos Blanca 30">Huevos Blanca 30</option>
+        <option value="Huevos Roja 30">Huevos Roja 30</option>
+        <option value="Huevos Orgánico 15">Huevos Orgánico 15</option>
+      </select>
+
+      <label>Peso (kg)</label>
+      <input id="weight" type="number" step="0.01" placeholder="ej: 4.50" />
+
+      <label>Destino / Cliente</label>
+      <input id="destination" placeholder="Nombre cliente o dirección" />
+
+      <div class="controls">
+        <button id="btnAdd">Agregar caja</button>
+        <button id="btnGenerate" class="ghost">Previsualizar etiqueta</button>
+      </div>
+
+      <hr />
+      <h4>Previsualización etiqueta</h4>
+      <div class="label-preview" id="labelPreview">
+        <div><strong id="lblCode">HC-XXXX</strong> <span class="small">(caja)</span></div>
+        <div id="lblProduct" class="small">Producto: --</div>
+        <div id="lblWeight" class="small">Peso: -- kg</div>
+        <div id="lblDest" class="small">Destino: --</div>
+        <div style="margin-top:8px" class="small">Etiqueta generada automáticamente. Presiona "Imprimir etiqueta" para generar PDF/etiqueta física.</div>
+        <div class="controls" style="margin-top:8px">
+          <button id="btnPrintLabel">Imprimir etiqueta</button>
+        </div>
+      </div>
+
+      <hr />
+      <h4>Reglas de control automático</h4>
+      <div class="small">
+        • Detección de duplicados por código.
+        <br>• Alerta si peso fuera del rango esperado (configurable).
+        <br>• Requerir destino para generar etiqueta.
+      </div>
+
+      <label>Rango de peso esperado (min - max, kg)</label>
+      <div class="row">
+        <input id="minW" type="number" step="0.01" value="3.00" style="width:46%" />
+        <input id="maxW" type="number" step="0.01" value="6.00" style="width:46%" />
+      </div>
+
+    </div>
+
+    <!-- Right column: Deliveries table, map mock, analytics -->
+    <div>
+      <div class="card" id="deliveriesCard">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Unidades en cola / Envíos</h3>
+          <div class="badge" id="totalCount">0</div>
+        </div>
+        <div class="small">Lista simulada de cajas registradas y su estado</div>
+
+        <table id="deliveriesTable" style="margin-top:12px">
+          <thead>
+            <tr><th>Código</th><th>Producto</th><th>Peso</th><th>Destino</th><th>Estado</th><th>Acciones</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button id="btnAssignRoute">Asignar a ruta</button>
+          <button id="btnExportCSV" class="ghost">Exportar CSV</button>
+          <button id="btnAutoLabelAll" class="ghost">Auto-etiquetar todas</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3>Alertas / Errores detectados</h3>
+        <div id="alerts" class="small">Sin alertas</div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3>Etiqueta lista para imprimir (vista)</h3>
+        <div class="print-area" id="printArea">
+          <!-- area used by print -->
+          <div style="border:1px solid #e2e8f0;padding:10px;border-radius:6px">
+            <div id="printCode" style="font-weight:700">HC-XXXX</div>
+            <div id="printProduct">Producto: --</div>
+            <div id="printWeight">Peso: -- kg</div>
+            <div id="printDest">Destino: --</div>
+            <div class="small" style="margin-top:6px">QR: <span id="printQR">[QR]</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>Prototipo interactivo — No es un sistema en producción. Diseñado para pruebas rápidas de flujos y validación de diseño (Huevos La Calera)</footer>
+
+  <script>
+    // Data store (in-memory) for prototype
+    const store = { deliveries: [] };
+
+    // Helpers
+    function $(id){return document.getElementById(id)}
+    function renderTable(){
+      const tbody = document.querySelector('#deliveriesTable tbody');
+      tbody.innerHTML = '';
+      store.deliveries.forEach((d, i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${d.code}</td><td>${d.product}</td><td>${d.weight.toFixed(2)}</td><td>${d.destination}</td><td>${d.status}</td><td>
+          <button data-i='${i}' class='btnMark'>Marcar entregado</button>
+          <button data-i='${i}' class='btnLabel ghost'>Etiqueta</button>
+        </td>`;
+        tbody.appendChild(tr);
+      });
+      $('totalCount').innerText = store.deliveries.length;
+      attachRowButtons();
+    }
+
+    function attachRowButtons(){
+      document.querySelectorAll('.btnMark').forEach(b=>b.onclick = e=>{
+        const i = +b.getAttribute('data-i');
+        store.deliveries[i].status = 'Entregado';
+        renderTable();
+      });
+      document.querySelectorAll('.btnLabel').forEach(b=>b.onclick = e=>{
+        const i = +b.getAttribute('data-i');
+        populateLabelPreview(store.deliveries[i]);
+      });
+    }
+
+    function addAlert(text, danger=false){
+      const box = $('alerts');
+      const el = document.createElement('div');
+      el.innerText = text;
+      el.style.marginTop = '6px';
+      if(danger) el.style.color = '#e74c3c';
+      if(box.innerText === 'Sin alertas') box.innerText = '';
+      box.prepend(el);
+    }
+
+    function clearAlerts(){ $('alerts').innerText = 'Sin alertas'; }
+
+    function populateLabelPreview(item){
+      $('lblCode').innerText = item.code;
+      $('lblProduct').innerText = 'Producto: ' + item.product;
+      $('lblWeight').innerText = 'Peso: ' + item.weight.toFixed(2) + ' kg';
+      $('lblDest').innerText = 'Destino: ' + item.destination;
+
+      $('printCode').innerText = item.code;
+      $('printProduct').innerText = 'Producto: ' + item.product;
+      $('printWeight').innerText = 'Peso: ' + item.weight.toFixed(2) + ' kg';
+      $('printDest').innerText = 'Destino: ' + item.destination;
+      $('printQR').innerText = 'QR:' + btoa(item.code).slice(0,8);
+    }
+
+    // Add new box / scan
+    $('btnAdd').onclick = ()=>{
+      const code = $('scanCode').value.trim() || generateCode();
+      const product = $('product').value;
+      const weight = parseFloat($('weight').value) || 0;
+      const destination = $('destination').value.trim();
+
+      // validations
+      clearAlerts();
+      if(!destination){ addAlert('Error: destino vacío', true); return; }
+      const dup = store.deliveries.find(d=>d.code===code);
+      if(dup){ addAlert('Error: código duplicado detectado — revisar escáner', true); return; }
+
+      const min = parseFloat($('minW').value);
+      const max = parseFloat($('maxW').value);
+      if(weight < min || weight > max){ addAlert(`Alerta: peso ${weight.toFixed(2)} kg fuera de rango (${min} - ${max})`, true); }
+
+      const item = { code, product, weight: isNaN(weight)?0:weight, destination, status: 'En bodega' };
+      store.deliveries.unshift(item);
+      renderTable();
+      populateLabelPreview(item);
+      addAlert('Caja agregada: ' + code);
+    }
+
+    // Generate preview only
+    $('btnGenerate').onclick = ()=>{
+      const code = $('scanCode').value.trim() || generateCode();
+      const product = $('product').value;
+      const weight = parseFloat($('weight').value) || 0;
+      const destination = $('destination').value.trim() || '--';
+      populateLabelPreview({code, product, weight, destination});
+      addAlert('Previsualización de etiqueta generada');
+    }
+
+    $('btnPrintLabel').onclick = ()=>{
+      // print only the label area
+      const html = `
+        <html>
+        <head><meta charset='utf-8'><title>Etiqueta ${$('printCode').innerText}</title></head>
+        <body style='font-family:Arial;padding:20px'>${$('printArea').innerHTML}</body>
+        </html>`;
+      const w = window.open('', '_blank');
+      w.document.write(html);
+      w.document.close();
+      w.print();
+    }
+
+    // Utility: generate simple codes
+    function generateCode(){
+      const prefix = 'HC-' + new Date().getFullYear();
+      const rnd = String(Math.floor(Math.random()*10000)).padStart(4,'0');
+      return `${prefix}-${rnd}`;
+    }
+
+    // Assign route: demo logic groups by first letter of destination
+    $('btnAssignRoute').onclick = ()=>{
+      if(store.deliveries.length===0){ addAlert('No hay cajas para asignar', true); return; }
+      store.deliveries.forEach(d=>{ if(d.status === 'En bodega') d.status = 'En ruta - Asignado'; });
+      renderTable();
+      addAlert('Todas las cajas en bodega fueron asignadas a rutas');
+    }
+
+    // Export CSV
+    $('btnExportCSV').onclick = ()=>{
+      if(store.deliveries.length===0){ addAlert('No hay datos para exportar', true); return; }
+      const headers = ['code','product','weight','destination','status'];
+      const lines = [headers.join(',')];
+      store.deliveries.forEach(d=>{
+        lines.push([d.code,`"${d.product}"`,d.weight,d.destination,d.status].join(','));
+      });
+      const csv = lines.join('\n');
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'huevos_la_calera_entregas.csv';
+      a.click(); URL.revokeObjectURL(url);
+      addAlert('CSV exportado');
+    }
+
+    // Auto label all: simulate printing labels for all
+    $('btnAutoLabelAll').onclick = ()=>{
+      if(store.deliveries.length===0){ addAlert('No hay cajas'); return; }
+      store.deliveries.forEach(d=> populateLabelPreview(d));
+      addAlert('Etiquetas generadas para todas las cajas (simulado)');
+    }
+
+    // Initial demo data
+    (function seed(){
+      store.deliveries.push({code:'HC-2025-0001',product:'Huevos Blanca 30',weight:4.20,destination:'Mercado Central',status:'En bodega'});
+      store.deliveries.push({code:'HC-2025-0002',product:'Huevos Orgánico 15',weight:3.80,destination:'Distrib. Norte',status:'En ruta - Asignado'});
+      renderTable();
+    })();
+
+  </script>
+</body>
+</html>
